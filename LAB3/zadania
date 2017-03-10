@@ -1,0 +1,5 @@
+1. Okreslic ile znakow musi miec haslo zlozone z symboli wybranego alfabetu (liczba znakow alfabetu podawana na wejsciu) aby jego entropia byla nie mniejsza niz entropia 256-bit klucza AES
+
+2. Napisac program szyfrujacy DES w trybie ECB podany plik binarny. Wynik szyfrowania zapisac do zew. pliku
+
+3. Napisac program generujacy klucz na podstawie hasla
