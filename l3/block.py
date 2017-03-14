@@ -1,4 +1,4 @@
-import sys, math
+import sys, math, binascii
 from Crypto.Cipher import DES,AES
 from Crypto.Random import get_random_bytes
 
@@ -16,20 +16,21 @@ def entropy(inputString):
         return result
 
 def entropyH(string, n):
-	l = len(string)
-	for i in range(l):
-		entropy = l * math.log(n, 2)
-	return entropy
+        l = len(string)
+        for i in range(l):
+                entropy = l * math.log(n, 2)
+        return entropy
 
 def pad(text, blocksize):
-	if (len(text) % blocksize == 0):
-		return text
-	padding = blocksize - len(text) % blocksize
-	padChar = b'\x00'
-	return text + padding * padChar
+        if (len(text) % blocksize == 0):
+                print "x"
+                return text
+        padding = blocksize - len(text) % blocksize
+        padChar = b'\x80'
+        return text + padding * padChar
 
 def unpad(text):
-	return text.rstrip(b'\x00')
+        return text.rstrip(b'\x80')
 
 def readFile(inputFile):
         text = ""
@@ -41,38 +42,63 @@ def writeFile(text, outputFile):
         with open(outputFile, "w") as f:
                 f.write(text)
 
-if (len(sys.argv) == 4):
-	key = sys.argv[1]
-	inFile = sys.argv[2]
-	outFile = sys.argv[3]
-	text = readFile(inFile)
-	
-	text = pad(text, 16)
+if (len(sys.argv) != 2 and len(sys.argv) != 5):
+        print "Podaj 4 argumenty: tryb szyfrowania ('-e' lub '-c') klucz, inputFile, outputFile"
+elif (len(sys.argv) == 5):
+        mode = sys.argv[1]
+        key = sys.argv[2]
+        inFile = sys.argv[3]
+        outFile = sys.argv[4]
+        text = readFile(inFile)
 
-	key = bytes(key)
-	iv1 = get_random_bytes(8)
-	iv2 = get_random_bytes(16)
+        text = pad(text, 16)
 
-	des = DES.new(key, DES.MODE_CBC, iv1)
-	encryptedDES = des.encrypt(text)
-	writeFile(encryptedDES, outFile + "DES")
+        key = bytes(key)
+        if (len(key) != 16 and len(key) != 32 and len(key) != 64):
+                print "Podaj klucz o dlugosci 16, 32 lub 64 bity"
+        else:
+                iv = get_random_bytes(16)
+                if (mode == "-e"):
+                        aes = AES.new(key, AES.MODE_ECB, iv)
+                        encryptedAES = aes.encrypt(text)
+                        writeFile(encryptedAES, outFile + "AESECB")
+                if (mode == "-c"):
+                        aes = AES.new(key, AES.MODE_CBC, iv)
+                        encryptedAES = aes.encrypt(text)
+                        writeFile(encryptedAES, outFile + "AESCBC")
+                if (mode == "-ie" or mode == "-ic"):
+                        dibheader = ""
+                        bmpheader = ""
+                        fIn = open(inFile, 'rb')
+                        bmpheader = fIn.read(14)
+                        dibheader = fIn.read(50)
+                        DIBheaderarray = []
+                        for i in range(0,80,2):
+                                DIBheaderarray.append(int(binascii.hexlify(dibheader)[i:i+2],16))
+                        width = sum([DIBheaderarray[i+4]*256**i for i in range(0,4)])
+                        height = sum([DIBheaderarray[i+8]*256**i for i in range(0,4)])
 
-	aes = AES.new(key+key, AES.MODE_ECB, iv2)
-	encryptedAES0 = aes.encrypt(text)
-	writeFile(encryptedAES0, outFile + "AESECB")
+                        row_padded = width * height * 3
+                        img = fIn.read(row_padded)
+                        cleartext = pad(binascii.unhexlify(binascii.hexlify(img)), 16)
+                        if (mode == "-ic"):
+                                aes = AES.new(key, AES.MODE_CBC, iv)
+                        if (mode == "-ie"):
+                                aes = AES.new(key, AES.MODE_ECB, iv)
+                        encryptedAES = aes.encrypt(cleartext)
+                        output = ""
+                        output+=bmpheader
+                        output+=dibheader
+                        output+=encryptedAES
+                        writeFile(output, outFile)
+                print "Entropia tekstu naturalnego: {0}".format(entropy(text))
+                print "Entropia kryptogramu: {0}".format(entropy(encryptedAES))
+elif (len(sys.argv) == 2 and sys.argv[1] == "-e"):
+        entropiaAES = 256 * math.log(2,2)
 
-	aes = AES.AESCipher(key+key, AES.MODE_CBC, iv2)
-	encryptedAES = aes.encrypt(text)
-	writeFile(encryptedAES, outFile + "AESCBC")
-
-	print "Entropia tekstu naturalnego: {0}".format(entropy(text))
-	print "Entropia kryptogramu: DES: {0}, AESCBC: {1}, AESECB: {2}".format(entropy(encryptedDES), entropy(encryptedAES), entropy(encryptedAES0))
-else:
-	entropiaAES = 256 * math.log(2,2)
-
-	for i in range(0,256):
-		entropia = i * math.log(26,2)
-		if(entropia > entropiaAES):
-			print 'Dla dlugosci {0} entropia wynosi {1} (alfabet 26 znakow)'.format(i, entropia)
-			print 'Jest wieksza od entropii klucza AES ktora wynosi {0}'.format(entropiaAES)
-			break
+        for i in range(0,256):
+                entropia = i * math.log(52,2)
+                if (entropia > entropiaAES):
+                        print 'Dla dlugosci {0} entropia wynosi {1} (alfabet 52 znakow)'.format(i, entropia)
+                        print 'Jest wieksza od entropii klucza AES ktora wynosi {0}'.format(entropiaAES)
+                        break
